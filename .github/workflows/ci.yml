@@ -25,5 +25,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - run: sudo apt-get update && sudo apt-get install -y nftables
-      # As root the test makes its own cgroup instead of asking a systemd user session.
-      - run: sudo env "PATH=$PATH" "CARGO_HOME=$HOME/.cargo" "RUSTUP_HOME=$HOME/.rustup" cargo test --locked --test netns
+      # As root the leak test makes its own cgroup instead of asking a systemd
+      # user session, and the systemd test can start the real units.
+      - run: sudo env "PATH=$PATH" "CARGO_HOME=$HOME/.cargo" "RUSTUP_HOME=$HOME/.rustup" cargo test --locked --test netns --test systemd

@@ -174,7 +174,7 @@ EOF
 
 	local cg
 	cg=$(systemctl show -p ControlGroup --value "$DAEMON" 2>/dev/null) || true
-	if [[ -n $cg && $cg != "/$SLICE/"* ]]; then
+	if [[ -n $cg && $cg != */"$SLICE"/* ]]; then
 		step Restarting "$DAEMON so it runs in $SLICE"
 		systemctl restart "$DAEMON"
 	fi

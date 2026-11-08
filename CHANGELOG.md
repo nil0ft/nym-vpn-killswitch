@@ -8,6 +8,10 @@ workflow publishes it as the GitHub release notes.
 
 ## [Unreleased]
 
+### Fixed
+
+- The guard did not start: "cgroup nym-killswitch.slice does not exist". systemd nests a slice with a dash in its name, so the slice lives at `nym.slice/nym-killswitch.slice`. The guard now uses the slice it runs in. If 0.1.0 left your machine in the emergency block, run `sudo nym-killswitch off` (or `run0 nym-killswitch off`), then install this version.
+
 ## [0.1.0] - 2026-11-08
 
 ### Added

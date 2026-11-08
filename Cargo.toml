@@ -18,7 +18,7 @@ tonic = { version = "0.14", default-features = false, features = ["channel"] }
 tonic-prost = "0.14"
 tower = { version = "0.5", default-features = false, features = ["util"] }
 
-# Both tests start helper processes and namespaces themselves, so they bring
+# These tests start helper processes and namespaces themselves, so they bring
 # their own main() instead of the libtest harness.
 [[test]]
 name = "netns"
@@ -28,6 +28,11 @@ harness = false
 [[test]]
 name = "nym_compat"
 path = "tests/nym_compat/main.rs"
+harness = false
+
+[[test]]
+name = "systemd"
+path = "tests/systemd/main.rs"
 harness = false
 
 [dev-dependencies]

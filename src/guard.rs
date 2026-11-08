@@ -13,7 +13,9 @@ use crate::nym::{self, Update};
 use crate::rules::{self, Policy, TABLE};
 use crate::system::{self, CGROUP_ROOT, Events, SavedLan};
 
-pub const DEFAULT_CGROUP: &str = "nym-killswitch.slice";
+/// nym-killswitch.service and nym-vpnd.service run in this slice. A dash
+/// nests slices, so systemd puts it at nym.slice/nym-killswitch.slice.
+pub const SLICE: &str = "nym-killswitch.slice";
 
 /// Where things live. The NYMKS_* variables exist for the tests in tests/.
 pub struct Settings {
@@ -27,8 +29,10 @@ pub struct Settings {
 
 impl Settings {
     pub fn from_env() -> Result<Self, String> {
-        let cgroup = std::env::var("NYMKS_CGROUP").unwrap_or_else(|_| DEFAULT_CGROUP.into());
-        let cgroup = cgroup.trim_start_matches('/').to_string();
+        let cgroup = match std::env::var("NYMKS_CGROUP") {
+            Ok(cgroup) => cgroup.trim_start_matches('/').to_string(),
+            Err(_) => own_slice()?,
+        };
         if cgroup.is_empty()
             || !cgroup
                 .bytes()
@@ -46,13 +50,29 @@ impl Settings {
     }
 }
 
+/// The cgroup of the slice this process runs in, as systemd placed it.
+fn own_slice() -> Result<String, String> {
+    let cgroups = std::fs::read_to_string("/proc/self/cgroup")
+        .map_err(|e| format!("/proc/self/cgroup: {e}"))?;
+    let own = cgroups
+        .lines()
+        .find_map(|l| l.strip_prefix("0::"))
+        .unwrap_or_default();
+    let parts: Vec<&str> = own.trim_start_matches('/').split('/').collect();
+    let end = parts.iter().rposition(|p| *p == SLICE).ok_or_else(|| {
+        format!("not running in {SLICE}; start the guard with: systemctl start nym-killswitch")
+    })?;
+    Ok(parts[..=end].join("/"))
+}
+
 pub fn run() -> Result<(), String> {
-    let settings = Settings::from_env()?;
-    let runtime = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .map_err(|e| e.to_string())?;
-    let result = runtime.block_on(guard(settings));
+    let result = Settings::from_env().and_then(|settings| {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| e.to_string())?
+            .block_on(guard(settings))
+    });
     if result.is_err() {
         block_if_unprotected();
     }
@@ -81,10 +101,7 @@ async fn guard(settings: Settings) -> Result<(), String> {
     }
     let cgroup_dir = Path::new(CGROUP_ROOT).join(&settings.cgroup);
     if !cgroup_dir.is_dir() {
-        return Err(format!(
-            "cgroup {} does not exist; start the guard with: systemctl start nym-killswitch",
-            settings.cgroup
-        ));
+        return Err(format!("cgroup {} does not exist", settings.cgroup));
     }
     std::fs::create_dir_all(&settings.state_dir).map_err(|e| e.to_string())?;
 

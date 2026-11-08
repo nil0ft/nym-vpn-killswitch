@@ -3,7 +3,7 @@
 use std::path::Path;
 use std::process::Command;
 
-use crate::guard::Settings;
+use crate::guard::SLICE;
 use crate::nft::Nft;
 use crate::nym;
 use crate::rules::{self, TABLE};
@@ -32,7 +32,6 @@ fn listing(nft: &mut Nft) -> Option<String> {
 
 pub fn status() -> Result<(), String> {
     need_root("status")?;
-    let settings = Settings::from_env()?;
     let listing = listing(&mut Nft::new()?);
     let guard = systemctl(&["is-active", UNIT]).unwrap_or_default();
 
@@ -58,13 +57,10 @@ pub fn status() -> Result<(), String> {
     let daemon = if cgroup.is_empty() {
         "not running".to_string()
     } else {
-        let placement = if cgroup.starts_with(&format!("/{}/", settings.cgroup)) {
+        let placement = if cgroup.split('/').any(|part| part == SLICE) {
             "allowed through".to_string()
         } else {
-            format!(
-                "outside {} and blocked. Fix: systemctl restart {DAEMON_UNIT}",
-                settings.cgroup
-            )
+            format!("outside {SLICE} and blocked. Fix: systemctl restart {DAEMON_UNIT}")
         };
         match nym::probe() {
             Ok(version) => format!("{version} running, {placement}"),
