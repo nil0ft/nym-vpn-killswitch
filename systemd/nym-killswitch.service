@@ -1,0 +1,36 @@
+[Unit]
+Description=NymVPN killswitch
+Documentation=https://github.com/nil0ft/nym-vpn-killswitch
+# Load the rules before any network manager brings a link up.
+DefaultDependencies=no
+After=local-fs.target nftables.service
+Wants=network-pre.target
+Before=network-pre.target shutdown.target
+Conflicts=shutdown.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=notify
+# Sockets in this slice are the only ones allowed past the killswitch.
+# The guard lives here too, which keeps the slice's cgroup ID stable.
+Slice=nym-killswitch.slice
+ExecStart=@BIN@ guard
+# Stopping the guard leaves the rules loaded. "nym-killswitch off" removes them.
+Restart=always
+RestartSec=5
+# Keeps the last Allow LAN value nym-vpnd reported.
+StateDirectory=nym-killswitch
+
+# NET_ADMIN for nftables. SYS_PTRACE to read nym-vpnd's /proc/PID/fdinfo and
+# learn which tun devices it holds.
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_SYS_PTRACE
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
+LockPersonality=yes
+RestrictRealtime=yes
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=sysinit.target

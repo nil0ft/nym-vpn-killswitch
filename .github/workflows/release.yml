@@ -1,0 +1,75 @@
+# scripts/release.sh tags vX.Y.Z; pushing the tag runs this. It publishes
+# nym-killswitch-vX.Y.Z_linux_x86_64.tar.gz, install and checksums.txt, with the
+# CHANGELOG.md section for X.Y.Z as the release notes.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  nym-compat:
+    uses: ./.github/workflows/nym-compat.yml
+
+  publish:
+    needs: [ci, nym-compat]
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Release notes from CHANGELOG.md
+        run: scripts/changelog.sh "${GITHUB_REF_NAME#v}" >notes.md
+
+      # Linking against an old glibc lets the binary run on every distro new
+      # enough for the kernel features it needs (Ubuntu 22.04, Debian 12, RHEL 9).
+      - name: Build against glibc 2.28
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src quay.io/pypa/manylinux_2_28_x86_64 \
+            bash -euo pipefail -c '
+              curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
+              . "$HOME/.cargo/env"
+              cargo build --release --locked
+              chown -R "$1" target' _ "$(id -u):$(id -g)"
+
+      - name: Check the glibc baseline
+        run: |
+          newest=$(objdump -T target/release/nym-killswitch | grep -oE 'GLIBC_[0-9.]+' | sort -Vu | tail -n 1)
+          echo "needs $newest"
+          [[ $(printf '%s\n' "$newest" GLIBC_2.28 | sort -V | tail -n 1) == GLIBC_2.28 ]]
+
+      - run: scripts/package.sh "${GITHUB_REF_NAME#v}"
+
+      - uses: actions/attest@v4
+        with:
+          subject-checksums: dist/checksums.txt
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat >>notes.md <<EOF
+
+          ## Install or upgrade
+
+          \`\`\`sh
+          curl -fsSLO https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/install
+          chmod +x install
+          ./install
+          \`\`\`
+
+          Check that the files came from this repository's release workflow with
+          \`gh attestation verify install -R $GITHUB_REPOSITORY\`.
+          EOF
+          gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/install dist/checksums.txt \
+            --verify-tag --title "nym-killswitch ${GITHUB_REF_NAME#v}" --notes-file notes.md

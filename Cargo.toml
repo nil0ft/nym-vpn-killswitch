@@ -1,0 +1,48 @@
+[package]
+name = "nym-killswitch"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "MIT"
+description = "Keep every packet inside NymVPN on Linux, also while it is disconnected"
+repository = "https://github.com/nil0ft/nym-vpn-killswitch"
+publish = false
+
+[dependencies]
+http = "1"
+hyper-util = { version = "0.1", default-features = false, features = ["tokio"] }
+libc = "0.2"
+prost = "0.14"
+tokio = { version = "1", features = ["rt", "net", "time", "macros", "signal", "io-util", "sync"] }
+tonic = { version = "0.14", default-features = false, features = ["channel"] }
+tonic-prost = "0.14"
+tower = { version = "0.5", default-features = false, features = ["util"] }
+
+# Both tests start helper processes and namespaces themselves, so they bring
+# their own main() instead of the libtest harness.
+[[test]]
+name = "netns"
+path = "tests/netns/main.rs"
+harness = false
+
+[[test]]
+name = "nym_compat"
+path = "tests/nym_compat/main.rs"
+harness = false
+
+[dev-dependencies]
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "net", "sync"] }
+tokio-stream = "0.1"
+tonic = { version = "0.14", default-features = false, features = ["channel", "server"] }
+
+# CI runs clippy with -D warnings, so these fail the build.
+[lints.clippy]
+# Every unsafe block needs a // SAFETY: comment explaining why it is sound.
+undocumented_unsafe_blocks = "warn"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

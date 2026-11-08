@@ -1,0 +1,30 @@
+# Does the newest NymVPN still work with nym-killswitch? Runs every morning and
+# before each release. GitHub mails the maintainer when a scheduled run fails.
+name: nym-compat
+
+on:
+  schedule:
+    - cron: "23 5 * * *"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: NymVPN tag, e.g. nym-vpn-v2026.15.0 (empty means the newest)
+        required: false
+        default: ""
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  nym-vpnd:
+    runs-on: ubuntu-26.04
+    env:
+      TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+      - run: sudo apt-get update && sudo apt-get install -y nftables
+      # Ubuntu blocks unprivileged user namespaces by default; the live test needs them.
+      - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Newest NymVPN source and Linux release
+        run: NYMKS_COMPAT=1 NYMKS_COMPAT_TAG="$TAG" cargo test --locked --test nym_compat
