@@ -8,6 +8,8 @@ workflow publishes it as the GitHub release notes.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-08
+
 ### Added
 
 - One nftables table that drops all traffic outside NymVPN's tunnel, also after you press Disconnect, at boot before nym-vpnd starts, and when nym-vpnd stops or crashes.
