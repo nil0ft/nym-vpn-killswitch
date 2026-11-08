@@ -252,7 +252,8 @@ fn live(tag: String) -> bool {
     }
 
     let status = Command::new("unshare")
-        .args(["--user", "--map-root-user", "--net", "--mount"])
+        .args(common::unshare_user())
+        .args(["--net", "--mount"])
         .arg(std::env::current_exe().expect("own path"))
         .arg(INNER)
         .arg(&nym)
@@ -263,7 +264,7 @@ fn live(tag: String) -> bool {
     status.success()
 }
 
-/// Runs inside the namespaces, as root of the user namespace.
+/// Runs inside the namespaces, as root.
 fn live_inside(nym: &Path, work: &Path) -> ExitCode {
     // nym-vpnd listens on /var/run/nym-vpn.sock.
     run(Command::new("mount").args(["-t", "tmpfs", "tmpfs", "/run"]));

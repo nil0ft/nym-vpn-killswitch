@@ -58,8 +58,7 @@ fn enter_cgroup() -> Option<PathBuf> {
     if std::env::var_os("NYMKS_TEST_SCOPE").is_some() {
         return None;
     }
-    // SAFETY: geteuid has no preconditions.
-    if unsafe { libc::geteuid() } == 0 {
+    if common::is_root() {
         let own = PathBuf::from(format!("/sys/fs/cgroup/nymks-test.{}", std::process::id()));
         fs::create_dir(&own).expect("create test cgroup");
         fs::write(own.join("cgroup.procs"), std::process::id().to_string()).expect("join it");
@@ -76,10 +75,20 @@ fn enter_cgroup() -> Option<PathBuf> {
 
 fn nsenter(pid: u32, program: impl AsRef<OsStr>) -> Command {
     let mut cmd = Command::new("nsenter");
-    cmd.args(["--preserve-credentials", "-U", "-n", "-t"])
-        .arg(pid.to_string())
-        .arg(program);
+    cmd.args(join(pid)).arg(program);
     cmd
+}
+
+/// `nsenter` flags to join the namespaces `unshare` made for `pid`; see
+/// [`common::unshare_user`].
+fn join(pid: u32) -> Vec<String> {
+    let user: &[&str] = if common::is_root() {
+        &[]
+    } else {
+        &["--preserve-credentials", "-U"]
+    };
+    let net = ["-n".into(), "-t".into(), pid.to_string()];
+    user.iter().map(|f| f.to_string()).chain(net).collect()
 }
 
 /// Start `sleep infinity` through `cmd`, which unshares a namespace, and wait
@@ -136,7 +145,7 @@ impl Test {
 
         let tmp = common::temp_dir("nymks-netns");
         let mut unshare = Command::new("unshare");
-        unshare.args(["--user", "--map-root-user", "--net"]);
+        unshare.args(common::unshare_user()).arg("--net");
         let host = hold_namespace(unshare);
         let net_ns = || {
             let mut cmd = nsenter(host.id(), "unshare");
@@ -174,8 +183,7 @@ impl Test {
                 cmd.args([ARG, "in-cgroup"])
                     .arg(self.cgdir().join("nym"))
                     .arg("nsenter")
-                    .args(["--preserve-credentials", "-U", "-n", "-t"])
-                    .arg(self.host.to_string())
+                    .args(join(self.host))
                     .arg(program);
                 cmd
             }

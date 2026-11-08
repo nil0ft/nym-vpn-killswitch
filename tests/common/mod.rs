@@ -99,6 +99,22 @@ pub fn need(tools: &[&str]) {
     }
 }
 
+pub fn is_root() -> bool {
+    // SAFETY: geteuid has no preconditions.
+    unsafe { libc::geteuid() == 0 }
+}
+
+/// `unshare` flags for a user namespace that grants root powers, or none when
+/// already root. Root in a new user namespace can no longer open files of
+/// other users, such as this test binary in a checkout under /home/runner.
+pub fn unshare_user() -> &'static [&'static str] {
+    if is_root() {
+        &[]
+    } else {
+        &["--user", "--map-root-user"]
+    }
+}
+
 /// This process's cgroup, relative to the cgroup2 root.
 pub fn own_cgroup() -> String {
     std::fs::read_to_string("/proc/self/cgroup")
